@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puntos Faciales - Ana Franco</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f2027, #2c5364, #3a6073);
+            background-size: 400% 400%;
+            animation: backgroundAnimation 12s ease infinite;
+            color: #E0E0E0;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        @keyframes backgroundAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .animated-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0px 8px 15px rgba(255, 255, 255, 0.2);
+        }
+        .container {
+            animation: fadeIn 1.2s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="container max-w-lg w-full p-8 bg-gray-900 rounded-3xl shadow-xl text-center">
+        <h1 class="text-4xl font-bold mb-6 text-blue-400">Detección de Puntos Faciales</h1>
+
+        <section class="mb-8">
+            <h2 class="text-lg font-semibold text-teal-300 mb-4">Sube una Imagen</h2>
+            <form id="uploadForm" class="flex flex-col items-center">
+                <label class="flex flex-col items-center justify-center w-40 h-40 rounded-full bg-blue-300 bg-opacity-10 hover:bg-opacity-20 transition cursor-pointer border-4 border-dotted border-teal-300">
+                    <div class="text-teal-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 2a10 10 0 00-10 10 10 10 0 0010 10 10 10 0 0010-10 10 10 0 00-10-10zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                        </svg>
+                        <p class="mt-2 text-sm">Seleccionar Imagen</p>
+                    </div>
+                    <input type="file" class="hidden" name="file" accept=".jpg,.jpeg,.png" onchange="mostrarNombreArchivo(this)" />
+                </label>
+    
+                <p id="nombreArchivo" class="mt-4 text-teal-200 text-sm"></p>
+                <button type="submit" class="animated-button mt-8 bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-2 rounded-full shadow-lg text-white font-semibold hover:from-purple-500 hover:to-blue-500 transition-transform duration-300">Analizar</button>
+            </form>
+        </section>
+
+        <section id="loading" class="hidden text-center my-4">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div class="bg-blue-500 h-2.5 rounded-full animate-pulse" style="width: 75%;"></div>
+            </div>
+            <p class="text-gray-500 mt-2">Cargando...</p>
+        </section>
+
+        <section id="results" class="hidden">
+            <h2 class="text-xl font-semibold mb-4 text-purple-300">Resultado</h2>
+            <p id="emotion" class="text-lg font-semibold text-teal-300 mb-4"></p>
+            <img id="resultImage" class="w-full h-auto rounded-lg border-2 border-purple-300" src="" alt="Resultado del Análisis">
+        </section>
+
+        <section id="error" class="hidden mt-4 bg-red-500 text-white p-3 rounded-lg">
+            <p>No se pudo analizar la imagen.</p>
+        </section>
+
+        {% if images %}
+        <section class="mt-10">
+            <h2 class="text-xl font-semibold mb-3 text-blue-300">Imágenes anteriores</h2>
+            <div class="grid grid-cols-3 sm:grid-cols-2 gap-6">
+                {% for image in images %}
+                <div class="relative group">
+                    <img 
+                        src="{{ url_for('static', filename='uploads/' + image) }}" 
+                        alt="Imagen previa {{ loop.index }}" 
+                        class="w-full h-36 object-cover rounded-lg shadow-md transform hover:scale-110 transition duration-300 ease-in-out" 
+                        onclick="analyzeExisting('{{ image }}')">
+                    <div class="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {{ image }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+        
+        
+
+    <script>
+        function mostrarNombreArchivo(input) {
+            var nombreArchivo = input.files[0]?.name || "No se seleccionó ningún archivo";
+            document.getElementById('nombreArchivo').textContent = "Archivo: " + nombreArchivo;
+        }
+
+        function showLoading() {
+            $('#loading').removeClass('hidden');
+            $('#error').addClass('hidden');
+            $('#results').addClass('hidden');
+        }
+
+        function hideLoading() {
+            $('#loading').addClass('hidden');
+        }
+
+        $(document).ready(function() {
+            $('#uploadForm').on('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+                showLoading();
+                $.ajax({
+                    url: '/analyze',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function(response) {
+                        hideLoading();
+                        $('#results').removeClass('hidden');
+                        $('#resultImage').attr('src', 'data:image/png;base64,' + response.image);
+                        $('#emotion').text('Emoción detectada: ' + response.emotion); // Mostramos la emoción
+                    },
+                    error: function(xhr) {
+                        hideLoading();
+                        $('#error').removeClass('hidden').text(xhr.responseJSON?.error || 'Error en el análisis.');
+                    }
+                });
+            });
+        });
+
+        function analyzeExisting(filename) {
+            showLoading();
+            const formData = new FormData();
+            formData.append('existing_file', filename);
+            $.ajax({
+                url: '/analyze',
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: function(response) {
+                    hideLoading();
+                    $('#results').removeClass('hidden');
+                    $('#resultImage').attr('src', 'data:image/png;base64,' + response.image);
+                    $('#emotion').text('Emoción detectada: ' + response.emotion); // Mostramos la emoción
+                },
+                error: function(xhr) {
+                    hideLoading();
+                    $('#error').removeClass('hidden').text(xhr.responseJSON?.error || 'Ocurrió un error');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
